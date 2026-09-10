@@ -1,6 +1,6 @@
 -- =====================================================================
 --  Семинар 1 — ваши решения
---  ФИО: ______________________   Группа: ________
+--  ФИО: Евстюничева Юлия   Группа: ИУ1-72Б
 --
 --  Прогнать весь файл:  make run
 --  Открыть консоль:     make psql
@@ -8,16 +8,42 @@
 set timezone = 'Europe/Moscow';
 
 -- ---------------------------------------------------------------------
--- Часть 2.2. Осмотритесь — запишите ответы прямо здесь, в комментариях
+-- Часть 2.2. Осмотритесь
 -- ---------------------------------------------------------------------
--- Строк в таблицах:        station __  unit __  sensor __  telemetry _____  event __  maintenance __
--- Период телеметрии:       с __________________ по __________________
--- Значения sensor.kind:    ...
--- Значения event.severity: ...   (что в них подозрительного?)
--- Датчики без измерений:   ...
--- Агрегаты без датчиков:   ...
--- «Грязная» запись в maintenance (id и что не так): ...
 
+-- Строк в таблицах:
+-- station 3
+-- unit 7
+-- sensor 18
+-- telemetry 24462
+-- event 26
+-- maintenance 11
+--
+-- Период телеметрии:
+-- с 2026-09-02 00:00:00+03 по 2026-09-03 00:00:00+03
+--
+-- Значения sensor.kind:
+-- temp, vibration, pressure, load
+--
+-- Значения event.severity:
+-- info, warning, warning , alarm, Alarm, unplanned_stop
+-- Подозрительные значения:
+-- 'warning ' содержит пробел в конце,
+-- 'Alarm' отличается регистром от 'alarm'.
+--
+-- Датчики без измерений:
+-- TE-999 на агрегате GPA-1.
+--
+-- Агрегаты без датчиков:
+-- GPA-4.
+--
+-- «Грязная» запись в maintenance:
+-- записи id = 1, 2, 3 относятся к одному ремонту GPA-2
+-- 12–13.03.2025, но инженер, время, описание и обозначение детали
+-- записаны в разном формате. Например, id = 2:
+-- инженер 'иванов' вместо 'Иванов А.С.',
+-- деталь '6312' вместо 'подшипник 6312 x2',
+-- примечание 'подшипник' вместо полного описания.
 
 
 -- ---------------------------------------------------------------------
@@ -37,6 +63,12 @@ order  by s.name, u.id;
 -- ---------------------------------------------------------------------
 -- Задача 2
 
+select u.id,
+       count(s.id) as sensor_count
+from unit u
+         left join sensor s on s.unit_id = u.id
+group by u.id
+order by u.id;
 
 
 -- ---------------------------------------------------------------------
@@ -45,6 +77,14 @@ order  by s.name, u.id;
 -- ---------------------------------------------------------------------
 -- Задача 3
 
+select u.id,
+       round(avg(t.value), 1) as avg_temp
+from unit u
+         join sensor s on s.unit_id = u.id
+         join telemetry t on t.sensor_id = s.id
+where s.kind = 'temp'
+group by u.id
+order by u.id;
 
 
 -- ---------------------------------------------------------------------
@@ -53,6 +93,15 @@ order  by s.name, u.id;
 -- ---------------------------------------------------------------------
 -- Задача 4
 
+select s.id,
+       s.kind,
+       max(t.value) as max_value
+from sensor s
+         join telemetry t on t.sensor_id = s.id
+where s.kind = 'temp'
+group by s.id, s.kind
+having max(t.value) > 85
+order by s.id;
 
 
 -- ---------------------------------------------------------------------
@@ -61,6 +110,15 @@ order  by s.name, u.id;
 -- ---------------------------------------------------------------------
 -- Задача 5
 
+select date_trunc('hour', t.ts) as hour,
+       round(avg(t.value), 1) as avg_temp
+from telemetry t
+    join sensor s on s.id = t.sensor_id
+where s.unit_id = 'GPA-2'
+  and s.kind = 'temp'
+  and s.tag = 'TE-302'
+group by date_trunc('hour', t.ts)
+order by hour;
 
 
 -- ---------------------------------------------------------------------
@@ -69,6 +127,14 @@ order  by s.name, u.id;
 -- ---------------------------------------------------------------------
 -- Задача 6
 
+select s.name as station_name,
+       e.severity,
+       count(*) as cnt
+from event e
+         join unit u on u.id = e.unit_id
+         join station s on s.id = u.station_id
+group by s.name, e.severity
+order by s.name, e.severity;
 
 
 -- ---------------------------------------------------------------------
@@ -77,6 +143,15 @@ order  by s.name, u.id;
 -- ---------------------------------------------------------------------
 -- Задача 7
 
+select u.id
+from unit u
+where not exists (
+    select 1
+    from event e
+    where e.unit_id = u.id
+      and lower(trim(e.severity)) in ('alarm', 'unplanned_stop')
+)
+order by u.id;
 
 
 -- =====================================================================
